@@ -6,15 +6,16 @@ The warehouse **pushes** stock changes to the API — the system never polls the
 
 ---
 
-## Live deployment (Render)
+## Live deployment
 
 | Service | URL |
 |---|---|
-| Backend API | `https://northstar-inventory-sync.onrender.com` |
-| Frontend | `https://northstar-inventory-sync-frontend.onrender.com` |
-| API docs | `https://northstar-inventory-sync.onrender.com/docs` |
+| **Backend API** | https://northstar-inventory-sync-mjpa.onrender.com |
+| **Frontend** | https://northstar-inventory-ui.onrender.com |
+| **API docs** | https://northstar-inventory-sync-mjpa.onrender.com/docs |
+| **Health check** | https://northstar-inventory-sync-mjpa.onrender.com/health |
 
-> Update these URLs after your first deploy.
+> **Free-tier note:** The backend spins down after 15 minutes of inactivity. The first request after a period of idle will take up to 30 seconds while the service cold-starts. Upgrade to Render's $7/month Starter plan to keep it always-on.
 
 ---
 
@@ -22,168 +23,75 @@ The warehouse **pushes** stock changes to the API — the system never polls the
 
 ```
 Warehouse ──POST /webhooks/inventory-update──► FastAPI ──► TiDB Serverless
-                                                  ▲
-React (12 s poll) ──GET /products────────────────┘
+                                                   ▲
+React (12 s poll) ──GET /products─────────────────┘
 
 Admin browser ──POST /auth/login──► JWT ──► PUT /admin/products/:id
 ```
 
-**Backend (FastAPI + TiDB)**
-- Webhook receiver — verifies HMAC-SHA256, writes stock + audit event, acks 200
-- Auth — bcrypt passwords, JWT access tokens (HS256)
-- Admin endpoints — create / update / delete products (admin role only)
-- Query API — reads directly from TiDB; DB kept fresh by webhook events
+**Backend — FastAPI + TiDB Serverless**
+- Webhook receiver: verifies HMAC-SHA256 signature, writes new stock + audit event, acks 200 immediately
+- Auth: bcrypt password hashing, HS256 JWT access tokens, `get_current_user` / `require_admin` FastAPI dependencies
+- Admin endpoints: create, update, delete products (admin role only); partial updates via `model_fields_set`
+- Query API: reads directly from TiDB; DB kept fresh by incoming webhook events, not polling
+- Idempotent startup migrations: `ALTER TABLE` for `price` and `image_url` columns run on every boot
 
-**Frontend (React + Vite)**
-- Public product list with live stock badges, price (KSh), and product images
-- Login / signup pages; JWT stored in sessionStorage
-- Admin panel — add/edit/delete products with live image preview and toast feedback
-- Polls `GET /products` every 12 s; auto-redirects to login on token expiry
-
----
-
-## Deploy to Render
-
-### Is Render a good fit?
-
-Yes. Render suits this project well:
-
-| Consideration | Verdict |
-|---|---|
-| Python / FastAPI | ✅ Native support — detects `requirements.txt` automatically |
-| Static React frontend | ✅ Free static site hosting with CDN |
-| TiDB Serverless DB | ✅ External — no Render DB needed; just set `DATABASE_URL` |
-| Free tier | ✅ Both services run on Render's free tier (spins down after 15 min inactivity) |
-| Webhook receiver | ✅ Render gives each service a stable public HTTPS URL |
-| Environment secrets | ✅ Set via dashboard — never in code |
-
-The only free-tier caveat: the backend **sleeps after 15 minutes of inactivity** and takes ~30 s to cold-start on the next request. Upgrade to the $7/month Starter plan to keep it always-on.
+**Frontend — React + Vite**
+- Public product list with live stock badges, thumbnails, and KSh prices; auto-refreshes every 12 s
+- Login / signup forms with show/hide password toggle; JWT stored in `sessionStorage`
+- Admin panel: add/edit/delete products, live image URL preview, toast feedback, loading states on every button
+- `ProtectedRoute` redirects unauthenticated users to `/login`; catches 401 and redirects on token expiry
+- SPA routing handled by `_redirects` file (Render static site)
 
 ---
 
-### Step 1 — Push your code to GitHub
+## Repository structure
 
-Make sure your latest changes are committed and pushed:
-
-```bash
-git add -A
-git commit -m "chore: prepare for Render deployment"
-git push origin main
 ```
-
-Confirm `backend/.env` is **not** in the repository:
-
-```bash
-git ls-files backend/.env   # must return nothing
+northstar-inventory-sync/
+├── backend/
+│   ├── app/
+│   │   ├── main.py          # FastAPI app, CORS, startup migrations
+│   │   ├── config.py        # env var loading
+│   │   ├── database.py      # SQLAlchemy engine + session
+│   │   ├── models.py        # User, Product, InventoryEvent ORM models
+│   │   ├── schemas.py       # Pydantic request/response schemas
+│   │   ├── auth.py          # bcrypt, JWT helpers, FastAPI dependencies
+│   │   └── routers/
+│   │       ├── products.py  # GET /products, GET /products/{id}/stock
+│   │       ├── webhooks.py  # POST /webhooks/inventory-update
+│   │       ├── auth.py      # POST /auth/signup, /auth/login, GET /auth/me
+│   │       └── admin.py     # POST/PUT/DELETE /admin/products
+│   ├── seed_db.py           # one-time sample data seed
+│   ├── simulate_warehouse.py # local webhook event simulator
+│   ├── requirements.txt
+│   ├── Procfile             # Render start command
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   │   ├── api.js           # all API calls, in-memory token store
+│   │   ├── App.jsx          # router + providers
+│   │   ├── context/
+│   │   │   ├── AuthContext.jsx
+│   │   │   └── ToastContext.jsx
+│   │   ├── components/
+│   │   │   ├── NavBar.jsx
+│   │   │   ├── ProductList.jsx
+│   │   │   ├── ProductDetail.jsx
+│   │   │   ├── StockBadge.jsx
+│   │   │   ├── ProtectedRoute.jsx
+│   │   │   └── Spinner.jsx
+│   │   ├── pages/
+│   │   │   ├── LoginPage.jsx
+│   │   │   ├── SignupPage.jsx
+│   │   │   └── AdminPage.jsx
+│   │   ├── hooks/usePolling.js
+│   │   └── index.css
+│   ├── public/_redirects    # Render SPA fallback: /* -> /index.html 200
+│   └── .env.example
+├── render.yaml              # Render blueprint (both services)
+└── .gitignore
 ```
-
----
-
-### Step 2 — Deploy the backend (Web Service)
-
-1. Go to [render.com](https://render.com) → **New** → **Web Service**
-2. Connect your GitHub repo (`northstar-inventory-sync`)
-3. Fill in the settings:
-
-| Field | Value |
-|---|---|
-| **Name** | `northstar-inventory-sync` |
-| **Region** | EU Central (closest to your TiDB cluster) |
-| **Root directory** | `backend` |
-| **Runtime** | `Python 3` |
-| **Build command** | `pip install -r requirements.txt` |
-| **Start command** | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| **Instance type** | Free (or Starter for always-on) |
-
-4. Click **Advanced** → **Add Environment Variable** — add all five:
-
-| Key | Value |
-|---|---|
-| `DATABASE_URL` | Your TiDB Serverless connection string (from TiDB Cloud console) |
-| `WEBHOOK_SECRET` | A strong random hex string — run `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `JWT_SECRET` | Another strong random hex string — same command |
-| `JWT_ALGORITHM` | `HS256` |
-| `JWT_EXPIRE_MINUTES` | `60` |
-
-5. Click **Create Web Service** — Render builds and deploys automatically.
-6. Copy the service URL (e.g. `https://northstar-inventory-sync.onrender.com`) — you need it for Step 3.
-
----
-
-### Step 3 — Deploy the frontend (Static Site)
-
-**Before deploying**, set the backend URL in the frontend build:
-
-1. In your repo, edit `frontend/.env.example` — note the `VITE_API_URL` variable.
-2. On Render: **New** → **Static Site**
-3. Settings:
-
-| Field | Value |
-|---|---|
-| **Name** | `northstar-inventory-sync-frontend` |
-| **Root directory** | `frontend` |
-| **Build command** | `npm install && npm run build` |
-| **Publish directory** | `dist` |
-
-4. **Add Environment Variable:**
-
-| Key | Value |
-|---|---|
-| `VITE_API_URL` | `https://northstar-inventory-sync.onrender.com` (your backend URL from Step 2) |
-
-5. Click **Create Static Site** — Render builds and serves the compiled React app.
-
----
-
-### Step 4 — Update CORS on the backend
-
-Once you have your frontend URL (e.g. `https://northstar-inventory-sync-frontend.onrender.com`), add it to the `allow_origins` list in [`backend/app/main.py`](backend/app/main.py):
-
-```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",                                  # local dev
-        "https://northstar-inventory-sync-frontend.onrender.com", # production
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-```
-
-Commit and push — Render auto-redeploys on every push to `main`.
-
----
-
-### Step 5 — Verify the deployment
-
-```bash
-# Health check
-curl https://northstar-inventory-sync.onrender.com/health
-# → {"status":"ok"}
-
-# Products list
-curl https://northstar-inventory-sync.onrender.com/products
-# → [{...}, ...]
-
-# API docs
-open https://northstar-inventory-sync.onrender.com/docs
-```
-
----
-
-### Step 6 — Point the webhook simulator at production
-
-To push live stock updates to the deployed backend:
-
-```bash
-cd backend
-API_BASE_URL=https://northstar-inventory-sync.onrender.com \
-  python simulate_warehouse.py --loop --interval 10
-```
-
-Or set `API_BASE_URL` in your local `.env`.
 
 ---
 
@@ -193,9 +101,9 @@ Or set `API_BASE_URL` in your local `.env`.
 
 - Python 3.11+
 - Node 18+
-- A TiDB Serverless cluster (free tier at [tidbcloud.com](https://tidbcloud.com)) or local MySQL/TiDB
+- A TiDB Serverless cluster — free tier at [tidbcloud.com](https://tidbcloud.com) — or local MySQL on port 4000/3306
 
-### 1. Clone and configure
+### 1. Clone
 
 ```bash
 git clone https://github.com/FranNMK/northstar-inventory-sync.git
@@ -206,62 +114,61 @@ cd northstar-inventory-sync
 
 ```bash
 cd backend
-python -m venv .venv
 
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
+# Create and activate virtual environment
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+source .venv/bin/activate     # macOS / Linux
 
 pip install -r requirements.txt
 
-# Create your local config
-copy .env.example .env     # Windows
-cp .env.example .env       # macOS/Linux
-
-# Edit .env — fill in DATABASE_URL, WEBHOOK_SECRET, JWT_SECRET
+# Configure — copy the example and fill in your values
+copy .env.example .env        # Windows
+cp .env.example .env          # macOS / Linux
 ```
 
-`.env` reference:
+**`backend/.env` values:**
 
 ```env
-DATABASE_URL=mysql+pymysql://<user>:<password>@<host>:4000/northstar_inventory
-WEBHOOK_SECRET=<random-hex-32>
-JWT_SECRET=<random-hex-32>
+DATABASE_URL=mysql+pymysql://<prefix>.<user>:<password>@<host>:4000/northstar_inventory
+WEBHOOK_SECRET=<run: python -c "import secrets; print(secrets.token_hex(32))">
+JWT_SECRET=<run same command again for a different value>
 JWT_ALGORITHM=HS256
 JWT_EXPIRE_MINUTES=60
-```
-
-Generate secrets:
-```bash
-python -c "import secrets; print(secrets.token_hex(32))"
+# FRONTEND_URL=              # leave blank for local dev
 ```
 
 ```bash
-# Create tables and seed sample products
+# Seed sample products (run once)
 python seed_db.py
 
-# Start API server
+# Start the API server
 uvicorn app.main:app --reload
-# → http://localhost:8000
-# → http://localhost:8000/docs
+# API:  http://localhost:8000
+# Docs: http://localhost:8000/docs
 ```
 
 ### 3. Frontend
 
 ```bash
 cd frontend
-cp .env.example .env   # already set to http://localhost:8000
 npm install
+# .env.example is already set to http://localhost:8000 — no edit needed
 npm run dev
 # → http://localhost:5173
 ```
 
-### 4. Simulate stock updates
+### 4. Simulate live stock updates
+
+Open a second terminal with the venv active:
 
 ```bash
-# In a second terminal (venv active)
 cd backend
+
+# Single event
+python simulate_warehouse.py
+
+# Continuous stream — updates every 4 seconds (Ctrl+C to stop)
 python simulate_warehouse.py --loop --interval 4
 ```
 
@@ -269,43 +176,120 @@ Watch the React UI — stock levels update within 12 seconds.
 
 ---
 
+## Deploying to Render
+
+### Backend (Web Service)
+
+1. [render.com](https://render.com) → **New** → **Web Service** → connect `northstar-inventory-sync` repo
+2. Settings:
+
+| Field | Value |
+|---|---|
+| **Root directory** | `backend` |
+| **Runtime** | Python 3 |
+| **Build command** | `pip install -r requirements.txt` |
+| **Start command** | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| **Region** | EU Central (closest to TiDB cluster) |
+
+3. **Environment variables** — all six are required:
+
+| Key | Value |
+|---|---|
+| `DATABASE_URL` | TiDB Serverless connection string from the TiDB Cloud console |
+| `WEBHOOK_SECRET` | Strong random hex — `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `JWT_SECRET` | Another strong random hex — same command |
+| `JWT_ALGORITHM` | `HS256` |
+| `JWT_EXPIRE_MINUTES` | `60` |
+| `FRONTEND_URL` | Your Render static site URL (set after frontend is deployed) |
+
+4. Click **Create Web Service**. Copy the URL (e.g. `https://northstar-inventory-sync-mjpa.onrender.com`).
+
+### Frontend (Static Site)
+
+1. **New** → **Static Site** → same repo
+2. Settings:
+
+| Field | Value |
+|---|---|
+| **Root directory** | `frontend` |
+| **Build command** | `npm install && npm run build` |
+| **Publish directory** | `dist` |
+
+3. Environment variable:
+
+| Key | Value |
+|---|---|
+| `VITE_API_URL` | Your backend URL — **no trailing slash** — e.g. `https://northstar-inventory-sync-mjpa.onrender.com` |
+
+4. Click **Create Static Site**.
+
+### Post-deploy: wire CORS
+
+Go back to the **backend** service → Environment → add/update:
+
+```
+FRONTEND_URL = https://northstar-inventory-ui.onrender.com
+```
+
+Render auto-redeploys. Done.
+
+### Verify
+
+```bash
+# Backend health
+curl https://northstar-inventory-sync-mjpa.onrender.com/health
+# → {"status":"ok"}
+
+# Products
+curl https://northstar-inventory-sync-mjpa.onrender.com/products
+# → [{...}, ...]
+```
+
+### Common deployment issues
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Backend returns 503 on startup | Missing env var (`JWT_SECRET`, `DATABASE_URL`) — process exits immediately | Check Render Logs tab; add all 6 env vars; Manual Deploy |
+| `//products` or `//auth/login` double-slash in browser | `VITE_API_URL` had a trailing slash | Remove trailing slash from the env var in Render dashboard |
+| Frontend shows 404 on direct URL / refresh | `_redirects` file missing or static site not configured correctly | Confirm `frontend/public/_redirects` contains `/* /index.html 200` |
+| `OperationalError: Missing user name prefix` | TiDB username not in `prefix.user` format | Use the full connection string from TiDB Cloud — includes the prefix |
+| Backend cold-start timeout (~30 s) | Free-tier service sleeps after 15 min idle | Upgrade to Render Starter ($7/mo) for always-on |
+
+---
+
 ## API reference
 
-### Public
+### Public endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/products` | List all products with stock status; optional `?category=` filter |
-| `GET` | `/products/{id}/stock` | Single-product live stock level |
-| `GET` | `/health` | Health check |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/health` | — | Health check; returns `{"status":"ok"}` |
+| `GET` | `/products` | — | All products with stock status, price, image; `?category=` filter |
+| `GET` | `/products/{id}/stock` | — | Single product live stock level |
 
-### Auth
+### Auth endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/auth/signup` | Register a new user (`email`, `password`, `role`) |
-| `POST` | `/auth/login` | Verify credentials, returns JWT access token |
-| `GET` | `/auth/me` | Return current user (requires JWT) |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/auth/signup` | — | Register — body: `{email, password, role}` |
+| `POST` | `/auth/login` | — | Login — body: `{email, password}`; returns JWT |
+| `GET` | `/auth/me` | JWT | Returns current user `{id, email, role, created_at}` |
 
-### Admin (JWT + admin role required)
+### Admin endpoints (JWT + admin role)
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/admin/products` | Create a new product |
-| `PUT` | `/admin/products/{id}` | Update a product (partial — only sent fields are written) |
-| `DELETE` | `/admin/products/{id}` | Delete a product |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/admin/products` | Admin JWT | Create product — body: `{id, name, category, current_stock, price?, image_url?}` |
+| `PUT` | `/admin/products/{id}` | Admin JWT | Partial update — only fields present in body are written |
+| `DELETE` | `/admin/products/{id}` | Admin JWT | Delete product permanently |
 
 ### Warehouse webhook
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/webhooks/inventory-update` | Receive stock update; requires `X-Webhook-Signature: sha256=<hmac>` |
+| `POST` | `/webhooks/inventory-update` | Receive stock push; requires `X-Webhook-Signature: sha256=<hmac-sha256-hex>` header |
 
-**Signature format:**
-```
-X-Webhook-Signature: sha256=<hmac-sha256-hex-of-raw-body>
-```
-Unsigned or tampered requests are rejected with **401**.
+Unsigned or tampered requests are rejected **401**.
 
 ---
 
@@ -313,45 +297,50 @@ Unsigned or tampered requests are rejected with **401**.
 
 ### Backend (`backend/.env`)
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | ✅ | SQLAlchemy connection string |
-| `WEBHOOK_SECRET` | ✅ | Shared HMAC-SHA256 secret for webhook verification |
-| `JWT_SECRET` | ✅ | Secret key for signing JWT tokens |
-| `JWT_ALGORITHM` | — | Token algorithm (default: `HS256`) |
-| `JWT_EXPIRE_MINUTES` | — | Token lifetime in minutes (default: `60`) |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | ✅ | — | SQLAlchemy MySQL connection string |
+| `WEBHOOK_SECRET` | ✅ | — | HMAC-SHA256 shared secret for webhook signature verification |
+| `JWT_SECRET` | ✅ | — | Secret for signing JWT access tokens |
+| `JWT_ALGORITHM` | — | `HS256` | JWT signing algorithm |
+| `JWT_EXPIRE_MINUTES` | — | `60` | Access token lifetime |
+| `FRONTEND_URL` | — | _(none)_ | Deployed frontend origin added to CORS (comma-separate multiple) |
 
 ### Frontend (`frontend/.env`)
 
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_API_URL` | `http://localhost:8000` | Backend base URL |
+| `VITE_API_URL` | `http://localhost:8000` | Backend base URL — **no trailing slash** |
 
 ---
 
 ## Database schema
 
-Tables are created automatically on startup. The two `ALTER TABLE` migrations for `price` and `image_url` are also applied automatically and are safe to re-run.
+Tables and columns are created automatically on startup. The `price` and `image_url` column migrations run on every boot and are safe to re-run (duplicate-column errors are silently ignored).
 
 ```sql
+-- Users table (authentication)
 CREATE TABLE users (
   id              INT AUTO_INCREMENT PRIMARY KEY,
   email           VARCHAR(255) NOT NULL UNIQUE,
-  hashed_password VARCHAR(255) NOT NULL,
-  role            VARCHAR(32)  NOT NULL DEFAULT 'staff',
-  created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+  hashed_password VARCHAR(255) NOT NULL,          -- bcrypt
+  role            VARCHAR(32)  NOT NULL DEFAULT 'staff',  -- 'admin' | 'staff'
+  created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX ix_users_email (email)
 );
 
+-- Products table
 CREATE TABLE products (
   id            VARCHAR(64)  PRIMARY KEY,
   name          VARCHAR(255) NOT NULL,
   category      VARCHAR(128) NOT NULL,
   current_stock INT          NOT NULL DEFAULT 0,
-  price         DOUBLE       NULL,
+  price         DOUBLE       NULL,                -- KSh; NULL = not set
   image_url     VARCHAR(512) NULL,
-  last_updated  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+  last_updated  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Webhook audit log
 CREATE TABLE inventory_events (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   product_id  VARCHAR(64) NOT NULL,
