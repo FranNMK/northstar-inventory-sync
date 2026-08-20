@@ -91,6 +91,13 @@ def create_tables() -> None:
         )
 
 
+@app.get("/", include_in_schema=False)
+def root():
+    """Render health-checker pings GET / — redirect it to /health."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/health")
+
+
 @app.get("/health", tags=["meta"])
 def health() -> dict:
     return {"status": "ok"}

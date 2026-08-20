@@ -1,4 +1,36 @@
-[build]
-  base = "backend"
-  command = "pip install -r requirements.txt"
-  publishDir = "backend"
+services:
+  # ── Backend API (Web Service) ──────────────────────────────────────────────
+  - type: web
+    name: northstar-inventory-sync-mjpa
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # set manually in Render dashboard
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "60"
+      - key: FRONTEND_URL
+        sync: false          # set to your static site URL after first deploy
+
+  # ── Frontend (Static Site) ────────────────────────────────────────────────
+  - type: web
+    name: northstar-inventory-ui
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false          # set to your backend URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
