@@ -4,6 +4,7 @@ FastAPI application entry point for the Northstar Inventory Sync service.
 
 import logging
 import logging.config
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,12 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
 
+# ── CORS origins ───────────────────────────────────────────────────────────────
+# Set FRONTEND_URL on Render (or any host) to add your deployed frontend origin.
+# Multiple origins can be comma-separated: "https://a.com,https://b.com"
+_extra = os.getenv("FRONTEND_URL", "")
+_allowed_origins = ["http://localhost:5173"] + [u.strip() for u in _extra.split(",") if u.strip()]
+
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Northstar Inventory Sync",
@@ -31,7 +38,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

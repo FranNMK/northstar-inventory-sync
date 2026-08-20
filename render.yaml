@@ -1,0 +1,4 @@
+[build]
+  base = "backend"
+  command = "pip install -r requirements.txt"
+  publishDir = "backend"
