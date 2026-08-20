@@ -490,3 +490,33 @@ tbody tr:last-child td { border-bottom: none; }
   margin-top: 8px;
   border: 1px solid #e5e7eb;
 }
+
+/* ── Password field with show/hide toggle ─────────────────────── */
+.pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pw-wrap .form-input {
+  padding-right: 40px; /* room for the toggle button */
+}
+
+.pw-toggle {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px;
+  color: #57606a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color .15s;
+}
+
+.pw-toggle:hover { color: #1f2328; }

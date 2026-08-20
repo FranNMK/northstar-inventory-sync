@@ -10,12 +10,14 @@ import Spinner from "../components/Spinner";
 export default function SignupPage() {
   const navigate = useNavigate();
 
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm]   = useState("");
-  const [role, setRole]         = useState("staff");
-  const [error, setError]       = useState(null);
-  const [loading, setLoading]   = useState(false);
+  const [email, setEmail]         = useState("");
+  const [password, setPassword]   = useState("");
+  const [confirm, setConfirm]     = useState("");
+  const [role, setRole]           = useState("staff");
+  const [showPw, setShowPw]       = useState(false);
+  const [showCon, setShowCon]     = useState(false);
+  const [error, setError]         = useState(null);
+  const [loading, setLoading]     = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -54,16 +56,32 @@ export default function SignupPage() {
             <label htmlFor="password" className="form-label">
               Password <span className="form-hint">(min. 8 characters)</span>
             </label>
-            <input id="password" type="password" className="form-input" value={password}
-              onChange={(e) => setPassword(e.target.value)} autoComplete="new-password"
-              disabled={loading} required />
+            <div className="pw-wrap">
+              <input id="password" type={showPw ? "text" : "password"}
+                className="form-input" value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password" disabled={loading} required />
+              <button type="button" className="pw-toggle"
+                onClick={() => setShowPw((v) => !v)}
+                aria-label={showPw ? "Hide password" : "Show password"}>
+                {showPw ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
 
           <div className="form-group">
             <label htmlFor="confirm" className="form-label">Confirm password</label>
-            <input id="confirm" type="password" className="form-input" value={confirm}
-              onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password"
-              disabled={loading} required />
+            <div className="pw-wrap">
+              <input id="confirm" type={showCon ? "text" : "password"}
+                className="form-input" value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                autoComplete="new-password" disabled={loading} required />
+              <button type="button" className="pw-toggle"
+                onClick={() => setShowCon((v) => !v)}
+                aria-label={showCon ? "Hide password" : "Show password"}>
+                {showCon ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
 
           <div className="form-group">

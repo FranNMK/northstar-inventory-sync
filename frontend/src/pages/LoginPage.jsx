@@ -15,6 +15,7 @@ export default function LoginPage() {
 
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw]     = useState(false);
   const [error, setError]       = useState(null);
   const [loading, setLoading]   = useState(false);
 
@@ -59,16 +60,26 @@ export default function LoginPage() {
 
           <div className="form-group">
             <label htmlFor="password" className="form-label">Password</label>
-            <input
-              id="password"
-              type="password"
-              className="form-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              disabled={loading}
-              required
-            />
+            <div className="pw-wrap">
+              <input
+                id="password"
+                type={showPw ? "text" : "password"}
+                className="form-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                disabled={loading}
+                required
+              />
+              <button
+                type="button"
+                className="pw-toggle"
+                onClick={() => setShowPw((v) => !v)}
+                aria-label={showPw ? "Hide password" : "Show password"}
+              >
+                {showPw ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
 
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
