@@ -87,9 +87,11 @@ export default function ProductList() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 48 }}></th>
                 <th>SKU</th>
                 <th>Name</th>
                 <th>Category</th>
+                <th>Price</th>
                 <th>Stock</th>
                 <th>Status</th>
                 <th>Last Updated</th>
@@ -98,11 +100,25 @@ export default function ProductList() {
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} onClick={() => setSelected(p)}>
+                  <td style={{ padding: "8px 8px 8px 12px" }}>
+                    {p.image_url ? (
+                      <img
+                        src={p.image_url}
+                        alt={p.name}
+                        className="product-thumb"
+                      />
+                    ) : (
+                      <span className="product-thumb-placeholder" />
+                    )}
+                  </td>
                   <td style={{ color: "#57606a", fontFamily: "monospace" }}>
                     {p.id}
                   </td>
                   <td style={{ fontWeight: 500 }}>{p.name}</td>
                   <td>{p.category}</td>
+                  <td style={{ color: "#57606a", fontVariantNumeric: "tabular-nums" }}>
+                    {p.price != null ? `KSh ${Number(p.price).toLocaleString("en-KE", { minimumFractionDigits: 2 })}` : "—"}
+                  </td>
                   <td style={{ fontVariantNumeric: "tabular-nums" }}>
                     {p.current_stock}
                   </td>

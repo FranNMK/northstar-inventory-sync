@@ -27,8 +27,20 @@ export default function ProductDetail({ product, onClose }) {
           ×
         </button>
 
+        {product.image_url && (
+          <img
+            src={product.image_url}
+            alt={product.name}
+            className="detail-image"
+          />
+        )}
+
         <h2>{product.name}</h2>
         <p className="category">{product.category}</p>
+
+        {product.price != null && (
+          <p className="detail-price">KSh {Number(product.price).toLocaleString("en-KE", { minimumFractionDigits: 2 })}</p>
+        )}
 
         {loading && !data && (
           <div className="state-box">

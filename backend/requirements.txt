@@ -6,3 +6,6 @@ python-dotenv
 httpx
 cryptography
 pydantic[email]
+passlib[bcrypt]
+bcrypt==4.3.0
+python-jose[cryptography]

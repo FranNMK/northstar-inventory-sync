@@ -48,6 +48,8 @@ def list_products(
             current_stock=p.current_stock,
             status=stock_status(p.current_stock),
             last_updated=p.last_updated,
+            price=p.price,
+            image_url=p.image_url,
         )
         for p in rows
     ]
