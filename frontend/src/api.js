@@ -5,7 +5,8 @@
  * The setToken / getToken helpers are called by AuthContext.
  */
 
-const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+// Strip any accidental trailing slash so BASE + "/path" never becomes "//path"
+const BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 // In-memory token store — survives page re-renders but not hard refreshes.
 // This is intentional: avoids XSS risks of localStorage.
