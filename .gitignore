@@ -1,0 +1,22 @@
+Set-Content .gitignore @"
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Env files (belt-and-suspenders alongside backend/.gitignore)
+backend/.env
+frontend/.env
+
+# OS
+.DS_Store
+Thumbs.db
+"@
+git add .gitignore
+git commit -m "chore: add root .gitignore"
+git push
